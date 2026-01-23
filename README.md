@@ -1,43 +1,66 @@
-# ICP CLI Usage Skill
+# Internet Computer Agent Skills
 
-This repo provides a Cursor Agent Skill that guides users through common `icp` CLI workflows for local development, deploys, canister operations, identities, and cycles/tokens. Use it whenever a user asks for ICP CLI commands or needs help with an `icp` workflow.
+Skills are folders of instructions and resources that an agent loads to perform
+specialized tasks. This repository collects Agent Skills focused on building,
+operating, and shipping on the Internet Computer (ICP).
 
-## What the skill covers
+## About this repository
 
-- Quick start flow: `icp new`, local network, build, deploy, and call
-- Local network commands: start, status, ping, stop
-- Canister operations: create, install, call, status, settings
-- Identity and principal management
-- Cycles and token balance/transfer tasks
-- Environment and network flags, with common pitfalls
+This repo is intentionally structured like `anthropics/skills` but scoped to
+ICP workflows. Each skill is self-contained with its own `SKILL.md`, and the
+`skills/` directory is the canonical home for all ICP-related skills.
 
-## Location
+## Skill sets
 
-The skill lives at:
+All skills live under `skills/`. Current skills include:
 
-- `skills/icp-cli-usage/SKILL.md`
+- `skills/icp-cli/` — Use the `icp` CLI for local networks, builds, deploys,
+  canister operations, identities, and cycles/tokens.
 
-## Usage guidance (high level)
+## Repository structure
 
-- Default to local network workflows unless a target is specified.
-- Use `-e/--environment` or `-n/--network` when a target is named, but never both.
-- Suggest `--identity` when multiple identities might exist.
-- Provide a minimal command set plus a short verify step.
-- If call arguments are unknown, omit args to trigger the interactive prompt.
-
-## Example workflow
+Each skill is a folder with a `SKILL.md` and optional references:
 
 ```
-icp new hello-icp
-cd hello-icp
-icp network start -d
-icp deploy
-icp canister call backend greet '("World")'
+skills/
+  icp-cli/
+    SKILL.md
 ```
+
+## Using these skills
+
+These skills are plain, portable skill folders and should work with all agents,
+including:
+
+- Claude Code
+- Claude.ai
+- Anthropic API agents
+- Cursor
+- OpenAI Codex
+- Gemini CLI
+- OpenCode
+- antigravity
+
+Install them in your agent's skill directory and keep the folder name the same
+as the skill identifier to make discovery clear. For installation instructions,
+see https://skills.sh/.
+
+## Creating new skills
+
+To add new ICP skills, follow the same structure as the existing ones:
+
+1. Create `skills/<skill-name>/SKILL.md`
+2. Use concise instructions, examples, and references
+3. Keep terminology consistent across skills
+
+## Contributing
+
+Please improve existing skills when you spot gaps, missing workflows, or
+outdated guidance, and open PRs to add new skills or expand coverage. Note:
+these skills were largely created by pointing Claude at docs with the
+Anthropics `create-skill` skill
+([skill-creator](https://skills.sh/anthropics/skills/skill-creator)).
 
 ## References
 
-- https://dfinity.github.io/icp-cli/
-- https://dfinity.github.io/icp-cli/reference/cli/
-- https://dfinity.github.io/icp-cli/guides/local-development/
-- https://dfinity.github.io/icp-cli/guides/installation/
+- https://github.com/anthropics/skills

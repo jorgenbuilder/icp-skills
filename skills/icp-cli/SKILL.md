@@ -1,6 +1,6 @@
 ---
-name: icp-cli-usage
-description: Guides use of the ICP CLI (icp) for local networks, builds, deploys, canister operations, identities, and cycles/tokens. Use when the user asks about icp-cli, icp commands, canister deployment, local ICP network workflows, or command help.
+name: icp-cli
+description: Guides use of the Internet Computer (ICP) CLI (icp) for local networks, builds, deploys, canister operations, identities, and cycles/tokens. Use when the user asks about icp-cli, icp commands, canister deployment, local ICP network workflows, or command help.
 ---
 
 # ICP CLI Usage
@@ -53,6 +53,14 @@ Use these to confirm the environment quickly:
 - **Arguments**: if canister call args are unknown, recommend interactive prompt (omit args).
 - **Network conflicts**: `icp network start` accepts a network name or `-e`; `icp deploy` uses `-e` (no `-n` flag).
 - **Environment variables**: mention `ICP_ENVIRONMENT` when the user wants a default.
+
+## Usage guidance (from README)
+
+- Default to local network workflows unless a target is specified.
+- Use `-e/--environment` or `-n/--network` when a target is named, but never both.
+- Suggest `--identity` when multiple identities might exist.
+- Provide the minimal command set plus a short verify step.
+- If call arguments are unknown, omit args to trigger the interactive prompt.
 
 ## Troubleshooting local network
 
