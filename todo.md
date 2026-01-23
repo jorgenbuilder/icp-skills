@@ -1,0 +1,4 @@
+- skill: authenticating using II when using agent-browser,
+- skill: writing integration tests with pic
+- skill: auditing canister code for known internet computer security vulnerabilities (reentrancy, etc.)
+- skill: retrieving canister interface definitions in any language
