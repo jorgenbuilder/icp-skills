@@ -11,9 +11,9 @@ Default to these steps unless the user asks for a specific command:
 
 1. Create a project: `icp new my-project`
 2. Start local network: `icp network start -d`
-3. Build canisters: `icp build`
-4. Deploy: `icp deploy`
-5. Call a method: `icp canister call <canister> <method> '(...)'`
+3. Deploy (builds automatically): `icp deploy`
+4. Call a method: `icp canister call <canister> <method> '(...)'`
+5. Verify if needed: `icp network status`, `icp canister status <canister>`
 
 Use `-e/--environment` when the user specifies a target (deploy uses environments; network start uses a network name or `-e`).
 
@@ -57,6 +57,7 @@ Use these to confirm the environment quickly:
 ## Troubleshooting local network
 
 - **Port 8000 already in use**: local PocketIC binds to `localhost:8000`. If `icp network start` fails, check and stop the other process with `lsof -i :8000` and `kill <PID>`.
+- **Shutdown**: `icp network stop` (use when finished with local testing).
 - **Verify network**: `icp network status` or `icp network ping --wait-healthy`
 
 ## Tool calls
@@ -135,6 +136,7 @@ Commands:
 icp new hello-icp
 cd hello-icp
 icp network start -d
+icp network status
 icp deploy
 icp canister call backend greet '("World")'
 ```
