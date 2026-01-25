@@ -32,5 +32,10 @@ temp/
 # Beads data (project-specific, will be initialized per project)
 .beads/
 
-# Claude Code local data
+# Agent local data
 .claude/
+.agent/
+.agents/
+.cursor/
+.gemini/
+.opencode/
