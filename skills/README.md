@@ -7,3 +7,5 @@ skill with a `SKILL.md` entry point.
 
 - `icp-cli/` — Guides ICP CLI workflows for local development, deployment,
   canister operations, identities, and cycles/tokens.
+- `pic-js/` — Guides writing Pic JS (`@dfinity/pic`) integration tests for
+  canisters using PocketIC across supported JS test runners.
