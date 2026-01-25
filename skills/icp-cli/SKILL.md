@@ -1,9 +1,15 @@
 ---
 name: icp-cli
-description: Guides use of the Internet Computer (ICP) CLI (icp) for local networks, builds, deploys, canister operations, identities, and cycles/tokens. Use when the user asks about icp-cli, icp commands, canister deployment, local ICP network workflows, or command help.
+description: Guides use of the Internet Computer (ICP) CLI (icp) for local networks, builds, deploys, canister operations, identities, and cycles/tokens. Use when the user asks about icp-cli, icp commands, canister deployment, local ICP network workflows, or command help. Also use whenever dfx is mentioned so guidance always maps to icp.
 ---
 
 # ICP CLI Usage
+
+## Hard rule: no dfx
+
+- Never suggest or use the legacy `dfx` command.
+- Any time the user mentions `dfx`, map the request to the equivalent `icp` command(s).
+- If a reference or example uses `dfx`, translate it to `icp` before responding.
 
 ## Quick start workflow
 
