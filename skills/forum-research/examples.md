@@ -1,6 +1,9 @@
 ## Login (agent-browser)
 
 ```bash
+# ALWAYS launch browser first
+agent-browser launch
+
 agent-browser open https://forum.dfinity.org/login
 agent-browser snapshot -i
 # Fill username/password using refs from snapshot
@@ -16,4 +19,21 @@ agent-browser open "https://forum.dfinity.org/u/$DFINITY_FORUM_USERNAME.json"
 ```bash
 agent-browser open "https://forum.dfinity.org/t/some-topic/12345.json"
 agent-browser get text "pre"
+```
+
+## Error recovery example
+
+If you get "Browser not launched" error:
+
+```bash
+# This will fail if browser not launched
+agent-browser open "https://forum.dfinity.org/search?q=security"
+# Error: Browser not launched. Call launch first.
+
+# FIX: Launch browser first
+agent-browser launch
+
+# Now retry the original command
+agent-browser open "https://forum.dfinity.org/search?q=security"
+# Success!
 ```
