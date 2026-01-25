@@ -30,29 +30,56 @@ npx skills add https://github.com/vercel-labs/agent-browser --skill agent-browse
 
 If you get the error "Browser not launched. Call launch first", simply call `agent-browser launch` and then retry your command. This is a normal part of the workflow.
 
+## Authentication (CRITICAL)
+
+**You MUST be logged in to access forum content. Most forum content is hidden without authentication.**
+
+**REQUIRED workflow for every session:**
+
+1. Launch browser with `agent-browser launch`
+2. **Login IMMEDIATELY** before doing any research (see Stage 1 below)
+3. Verify login by checking the top right of any forum page:
+   - **Logged in**: Account dropdown visible in top right
+   - **Not logged in**: "Sign Up" and "Log In" buttons visible in top right
+4. Only proceed with research tasks after confirming you're logged in
+
+**During long sessions:**
+- Periodically check the top right of the page to verify you're still logged in
+- If you see "Sign Up" and "Log In" buttons instead of account dropdown, re-authenticate immediately
+- Sessions may expire after inactivity - re-login if needed
+
 ## Error handling and persistence
 
 When using this skill, you may encounter errors. **Always persist through errors by:**
 
 1. **Launch errors**: If you see "Browser not launched", call `agent-browser launch` and retry.
 2. **Login errors**: If credentials fail, try again or check the credential source.
-3. **Navigation errors**: If a page fails to load, retry the navigation.
-4. **Element not found**: If snapshot elements change, take a fresh snapshot and update element refs.
+3. **Access denied / empty results**: You're not logged in - complete the login process immediately.
+4. **Navigation errors**: If a page fails to load, retry the navigation.
+5. **Element not found**: If snapshot elements change, take a fresh snapshot and update element refs.
 
 **Do not give up after a single error.** Most errors can be resolved by:
 - Launching the browser if not already launched
+- **Ensuring you're logged in** (check top right of page for account dropdown vs login buttons)
 - Retrying the failed command
 - Taking a fresh snapshot to update element references
 - Verifying you're on the expected page before interacting with it
 
-## Stage 1: login only
+## Stage 1: Login (MANDATORY FIRST STEP)
+
+**This MUST be the first thing you do in every session. Do not skip this step.**
 
 1. Launch the browser with `agent-browser launch` (required first step).
 2. Obtain credentials using one of the approved methods in `reference.md`.
 3. Navigate to `https://forum.dfinity.org/login`.
 4. Always choose the username/password option on the login page (ignore GitHub and passkey options).
 5. Fill username and password, then submit.
-6. Confirm login by opening `https://forum.dfinity.org/u/<username>.json`.
+6. **Confirm login by taking a snapshot and checking the top right of the page:**
+   - Look for an account dropdown (logged in successfully)
+   - If you see "Sign Up" and "Log In" buttons instead, login failed - retry the login process
+7. Alternative verification: Open `https://forum.dfinity.org/u/<username>.json` - you should see your user profile data.
+
+**After login confirmation, you can proceed with research tasks.**
 
 ## Discourse JSON access
 
