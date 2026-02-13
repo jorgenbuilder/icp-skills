@@ -1,6 +1,6 @@
 # ICP CLI Examples
 
-Practical workflow examples for common ICP CLI tasks.
+Practical workflow examples for common ICP CLI v0.1.0 tasks.
 
 ## Recipe-Based Project Creation
 
@@ -13,13 +13,12 @@ Create a Rust backend canister using the official recipe:
 mkdir my-project
 cd my-project
 
-# Create icp.yaml with Rust recipe
+# Create icp.yaml with Rust recipe (version required)
 cat > icp.yaml << 'EOF'
 canisters:
-  backend:
-    type: recipe
+  - name: backend
     recipe:
-      type: "@dfinity/rust"
+      type: "@dfinity/rust@v3.0.0"
       configuration:
         package: backend  # Matches Cargo.toml package name
 EOF
@@ -47,12 +46,12 @@ cd my-project
 
 cat > icp.yaml << 'EOF'
 canisters:
-  backend:
-    type: recipe
+  - name: backend
     recipe:
-      type: "@dfinity/motoko"
+      type: "@dfinity/motoko@v4.0.0"
       configuration:
         main: src/main.mo
+        args: ""  # Required in v4.0.0 (moc compiler flags, will become optional)
 EOF
 
 # Create Motoko source
@@ -82,10 +81,9 @@ cd my-project
 
 cat > icp.yaml << 'EOF'
 canisters:
-  frontend:
-    type: recipe
+  - name: frontend
     recipe:
-      type: "@dfinity/asset-canister"
+      type: "@dfinity/asset-canister@v2.1.0"
       configuration:
         dir: dist  # Directory containing built assets
 EOF
@@ -119,10 +117,9 @@ sha256sum custom.wasm
 
 cat > icp.yaml << 'EOF'
 canisters:
-  prebuilt:
-    type: recipe
+  - name: prebuilt
     recipe:
-      type: "@dfinity/prebuilt"
+      type: "@dfinity/prebuilt@v2.0.0"
       configuration:
         path: ./custom.wasm
         sha256: "abc123def456..."  # From sha256sum output
@@ -139,29 +136,27 @@ Combine multiple canister types in one project:
 ```yaml
 # icp.yaml
 canisters:
-  backend:
-    type: recipe
+  - name: backend
     recipe:
-      type: "@dfinity/rust"
+      type: "@dfinity/rust@v3.0.0"
       configuration:
         package: backend
     settings:
       compute_allocation: 20
-      memory_allocation: 2GB
+      memory_allocation: 2147483648
 
-  frontend:
-    type: recipe
+  - name: frontend
     recipe:
-      type: "@dfinity/asset-canister"
+      type: "@dfinity/asset-canister@v2.1.0"
       configuration:
         dir: dist
 
-  motoko_service:
-    type: recipe
+  - name: motoko_service
     recipe:
-      type: "@dfinity/motoko"
+      type: "@dfinity/motoko@v4.0.0"
       configuration:
         main: src/service.mo
+        args: ""
 ```
 
 Deploy all canisters:
@@ -170,23 +165,6 @@ Deploy all canisters:
 icp network start -d
 icp deploy  # Deploys all three canisters
 ```
-
-### Recipe Versioning Example
-
-Pin to specific recipe version for reproducible builds:
-
-```yaml
-# icp.yaml
-canisters:
-  backend:
-    type: recipe
-    recipe:
-      type: "@dfinity/rust@v3.0.0"  # Pinned to v3.0.0
-      configuration:
-        package: backend
-```
-
-Recommended for production deployments and CI/CD pipelines.
 
 ### Local Recipe File
 
@@ -197,15 +175,17 @@ mkdir -p recipes
 
 cat > recipes/custom-rust.hbs << 'EOF'
 build:
-  - script: cargo build --release --target wasm32-unknown-unknown
-  - script: ic-wasm optimize ./target/wasm32-unknown-unknown/release/{{package}}.wasm -o {{package}}_optimized.wasm
-wasm: {{package}}_optimized.wasm
+  steps:
+    - type: script
+      commands:
+        - cargo build --release --target wasm32-unknown-unknown
+        - ic-wasm optimize ./target/wasm32-unknown-unknown/release/{{package}}.wasm -o {{package}}_optimized.wasm
+        - cp {{package}}_optimized.wasm "$ICP_WASM_OUTPUT_PATH"
 EOF
 
 cat > icp.yaml << 'EOF'
 canisters:
-  backend:
-    type: recipe
+  - name: backend
     recipe:
       type: "file://recipes/custom-rust.hbs"
       configuration:
@@ -220,8 +200,7 @@ Use a recipe from a custom URL:
 ```yaml
 # icp.yaml
 canisters:
-  backend:
-    type: recipe
+  - name: backend
     recipe:
       type: "https://example.com/recipes/my-recipe.hbs"
       sha256: "abc123..."  # Required for integrity verification
@@ -254,14 +233,14 @@ icp canister status backend  # Check local canister
 
 # 2. Deploy to staging (custom environment)
 icp deploy -e staging
-icp canister status -e staging backend
-icp canister call -e staging backend greet '("Staging")'
+icp canister status backend -e staging
+icp canister call backend greet '("Staging")' -e staging
 
 # 3. Promote to IC mainnet
-# IMPORTANT: Use -e ic (not --mainnet, which was removed in beta.5)
+# IMPORTANT: Use -e ic (not --mainnet)
 icp deploy -e ic
-icp canister status -e ic backend
-icp canister call -e ic backend greet '("Production")'
+icp canister status backend -e ic
+icp canister call backend greet '("Production")' -e ic
 ```
 
 ### Environment Configuration in icp.yaml
@@ -271,32 +250,31 @@ Define staging and production environments:
 ```yaml
 # icp.yaml
 canisters:
-  backend:
-    type: recipe
+  - name: backend
     recipe:
-      type: "@dfinity/rust"
+      type: "@dfinity/rust@v3.0.0"
       configuration:
         package: backend
     settings:
       compute_allocation: 10  # Default allocation
 
 environments:
-  staging:
+  - name: staging
     network: ic
-    canisters:
+    canisters: [backend]
+    settings:
       backend:
-        settings:
-          compute_allocation: 20  # More resources for staging tests
-          memory_allocation: 2GB
+        compute_allocation: 20  # More resources for staging tests
+        memory_allocation: 2147483648
 
-  production:
+  - name: production
     network: ic
-    canisters:
+    canisters: [backend]
+    settings:
       backend:
-        settings:
-          compute_allocation: 50  # Maximum resources for production
-          memory_allocation: 4GB
-          freezing_threshold: 7776000  # 90 days
+        compute_allocation: 50  # Maximum resources for production
+        memory_allocation: 4294967296
+        freezing_threshold: 7776000  # 90 days
 ```
 
 ### Environment-Specific Settings
@@ -306,26 +284,24 @@ Different resource allocations per environment:
 ```yaml
 # icp.yaml
 canisters:
-  backend:
-    type: recipe
+  - name: backend
     recipe:
-      type: "@dfinity/rust"
+      type: "@dfinity/rust@v3.0.0"
       configuration:
         package: backend
     settings:
       compute_allocation: 5      # Local default
-      memory_allocation: 512MB
 
 environments:
-  ic:  # IC mainnet environment
-    canisters:
+  - name: ic
+    canisters: [backend]
+    settings:
       backend:
-        settings:
-          compute_allocation: 30    # Production allocation
-          memory_allocation: 3GB
-          controllers:
-            - aaaaa-aa               # Production controller
-          log_visibility: controllers  # Restrict logs
+        compute_allocation: 30    # Production allocation
+        memory_allocation: 3221225472
+        controllers:
+          - aaaaa-aa               # Production controller
+        log_visibility: controllers  # Restrict logs
 ```
 
 ### Canister ID Management Across Environments
@@ -344,40 +320,32 @@ Canister IDs are stored per-environment:
 
 Commit environment-specific `canister_ids.json` to preserve IDs.
 
-### Environment-Specific Argument Files
+### Environment-Specific Initialization Arguments
 
 Use different initialization arguments per environment:
 
 ```yaml
 # icp.yaml
 canisters:
-  backend:
-    type: recipe
+  - name: backend
     recipe:
-      type: "@dfinity/rust"
+      type: "@dfinity/rust@v3.0.0"
       configuration:
         package: backend
-    install_args: args/local_init.did  # Default for local
+    init_args: "(record { mode = \"local\" })"
 
 environments:
-  staging:
-    canisters:
-      backend:
-        install_args: args/staging_init.did
+  - name: staging
+    network: ic
+    canisters: [backend]
+    init_args:
+      backend: "(record { mode = \"staging\" })"
 
-  production:
-    canisters:
-      backend:
-        install_args: args/production_init.did
-```
-
-```candid
-// args/production_init.did
-(record {
-  max_users = 100000 : nat64;
-  log_level = "error";
-  api_endpoint = "https://api.production.example.com";
-})
+  - name: production
+    network: ic
+    canisters: [backend]
+    init_args:
+      backend: "(record { mode = \"production\" })"
 ```
 
 ### Checking Environment Status
@@ -391,8 +359,8 @@ icp environment list
 Check canister status in specific environment:
 
 ```bash
-icp canister status -e staging backend
-icp canister status -e ic backend  # IC mainnet (not --mainnet)
+icp canister status backend -e staging
+icp canister status backend -e ic  # IC mainnet (not --mainnet)
 ```
 
 ### Migration Between Environments
@@ -404,7 +372,7 @@ Deploy same canister across environments while preserving IDs:
 icp deploy
 
 # Create canister on IC without installing
-icp canister create -e ic backend
+icp canister create backend -e ic
 
 # Deploy (install) to IC
 icp deploy -e ic backend
@@ -412,53 +380,36 @@ icp deploy -e ic backend
 # Canister IDs are now tracked in both environments
 ```
 
-## Containerized Network Setup
+## Docker Network Setup
 
 ### Docker-Based Network Configuration
 
-Configure a containerized local network in `icp.yaml`:
+Configure a Docker-based local network in `icp.yaml`:
 
 ```yaml
 # icp.yaml
 networks:
-  local:
-    type: containerized
-    container:
-      image: ghcr.io/dfinity/pocketic:latest
-      ports:
-        - "127.0.0.1:8000:8000"  # Binds to localhost only (secure)
+  - name: local
+    mode: managed
+    image: ghcr.io/dfinity/icp-cli-network-launcher
+    port-mapping:
+      - "8000:4943"  # host:container (container uses port 4943)
 
 canisters:
-  backend:
-    type: recipe
+  - name: backend
     recipe:
-      type: "@dfinity/rust"
+      type: "@dfinity/rust@v3.0.0"
       configuration:
         package: backend
 ```
 
-Start the containerized network:
+Start the Docker-based network:
 
 ```bash
 icp network start -d
 ```
 
-**Windows requirement:** Docker Desktop must be installed and running. Local networks (both managed and containerized) require Docker Desktop on Windows.
-
-### Network Security (Beta.5 Improvement)
-
-Networks now bind to `127.0.0.1` by default, preventing external access:
-
-```yaml
-networks:
-  local:
-    type: containerized
-    container:
-      ports:
-        - "127.0.0.1:8000:8000"  # Only accessible from localhost
-```
-
-This prevents accidental exposure of local development networks.
+**Windows requirement:** Docker Desktop must be installed and running. Local networks (both managed and Docker-based) require Docker Desktop on Windows.
 
 ### Multiple Isolated Networks
 
@@ -467,43 +418,41 @@ Run multiple projects with isolated networks simultaneously:
 ```yaml
 # project1/icp.yaml
 networks:
-  local:
-    type: containerized
-    container:
-      image: ghcr.io/dfinity/pocketic:latest
-      ports:
-        - "127.0.0.1:8001:8000"  # Port 8001
+  - name: local
+    mode: managed
+    image: ghcr.io/dfinity/icp-cli-network-launcher
+    port-mapping:
+      - "8001:4943"  # Port 8001
 ```
 
 ```yaml
 # project2/icp.yaml
 networks:
-  local:
-    type: containerized
-    container:
-      image: ghcr.io/dfinity/pocketic:latest
-      ports:
-        - "127.0.0.1:8002:8000"  # Port 8002 (different)
+  - name: local
+    mode: managed
+    image: ghcr.io/dfinity/icp-cli-network-launcher
+    port-mapping:
+      - "8002:4943"  # Port 8002 (different)
 ```
 
 Both networks can run simultaneously without conflicts.
 
-### IC Network Configuration Options
+### Network Options
 
 Simulate IC mainnet behavior locally:
 
 ```yaml
 networks:
-  local:
-    type: containerized
-    container:
-      image: ghcr.io/dfinity/pocketic:latest
-      ports:
-        - "127.0.0.1:8000:8000"
+  - name: local
+    mode: managed
     ii: true                    # Enable Internet Identity
     nns: true                   # Enable Network Nervous System
-    subnets: 4                  # Simulate 4 subnets
-    artificial-delay-ms: 50     # 50ms network latency simulation
+    subnets:                    # Configure subnet types
+      - application
+      - application
+      - application
+      - application
+    artificial_delay_ms: 50     # 50ms network latency simulation
 ```
 
 Useful for testing realistic IC behavior locally.
@@ -516,15 +465,14 @@ Configure resource limits in `icp.yaml`:
 
 ```yaml
 canisters:
-  backend:
-    type: recipe
+  - name: backend
     recipe:
-      type: "@dfinity/rust"
+      type: "@dfinity/rust@v3.0.0"
       configuration:
         package: backend
     settings:
       compute_allocation: 30      # 30% compute guarantee
-      memory_allocation: 3GB      # 3 GB maximum memory
+      memory_allocation: 3221225472  # 3 GB maximum memory
       freezing_threshold: 7776000 # 90 days (in seconds)
 ```
 
@@ -538,7 +486,7 @@ Update settings for existing canister:
 
 ```bash
 icp canister settings update backend --compute-allocation 50
-icp canister settings update backend --memory-allocation 4GB
+icp canister settings update backend --memory-allocation 4294967296
 ```
 
 ### Deploying to Specific Subnet
@@ -546,50 +494,41 @@ icp canister settings update backend --memory-allocation 4GB
 Deploy canister to a specific subnet:
 
 ```bash
-icp canister create backend --subnet <subnet-id>
-icp canister install backend
-```
-
-Or specify in `icp.yaml`:
-
-```yaml
-canisters:
-  backend:
-    type: recipe
-    recipe:
-      type: "@dfinity/rust"
-      configuration:
-        package: backend
-    subnet: <subnet-id>
+icp canister create backend --subnet <subnet-id> -e ic
+icp canister install backend -e ic
 ```
 
 ### Configuring Log Visibility and Environment Variables
 
 ```yaml
 canisters:
-  backend:
-    type: recipe
+  - name: backend
     recipe:
-      type: "@dfinity/rust"
+      type: "@dfinity/rust@v3.0.0"
       configuration:
         package: backend
     settings:
       log_visibility: controllers  # Only controllers can read logs
       environment_variables:
-        - name: API_KEY
-          value: "secret-key"
-        - name: LOG_LEVEL
-          value: "info"
-        - name: MAX_CONNECTIONS
-          value: "100"
+        API_KEY: "secret-key"
+        LOG_LEVEL: "info"
+        MAX_CONNECTIONS: "100"
 ```
 
-### Controller Safety (Beta.5 Feature)
+Update log visibility via CLI:
+
+```bash
+icp canister settings update backend --log-visibility public
+icp canister settings update backend --add-log-viewer <principal>
+icp canister settings update backend --remove-log-viewer <principal>
+```
+
+### Controller Safety
 
 CLI warns before removing yourself from controllers:
 
 ```bash
-icp canister settings update backend --controllers aaaaa-aa
+icp canister settings update backend --set-controller aaaaa-aa
 
 # Warning: You are about to remove yourself from the controllers.
 # This will prevent you from managing this canister.
@@ -599,7 +538,7 @@ icp canister settings update backend --controllers aaaaa-aa
 Skip confirmation in scripts with `--force`:
 
 ```bash
-icp canister settings update backend --controllers aaaaa-aa --force
+icp canister settings update backend --set-controller aaaaa-aa --force
 ```
 
 **Important:** Never accidentally lock yourself out of a canister. Review controller changes carefully.
@@ -614,25 +553,7 @@ icp canister metadata backend icp:public
 icp canister metadata backend icp:private
 ```
 
-New in beta.5: `canister metadata` command for accessing canister metadata sections.
-
-### Canister Status Showing Name (Beta.5 Improvement)
-
-Canister status now displays the canister name:
-
-```bash
-icp canister status backend
-
-# Output includes:
-# Canister: backend
-# Status: Running
-# Module hash: 0xabc123...
-# Controllers: [...]
-# Memory size: 1.2 MB
-# Cycles: 5.3 T
-```
-
-### Large WASM Deployment (Beta.5 Feature)
+### Large WASM Deployment
 
 WASM modules larger than 2MB are automatically uploaded in chunks:
 
@@ -651,8 +572,8 @@ This happens transparently. You don't need to do anything special for large WASM
 Keyring storage is the most secure option (uses OS keychain):
 
 ```bash
-icp identity new my-identity --storage-mode keyring
-icp identity use my-identity
+icp identity new my-identity --storage keyring
+icp identity default my-identity
 ```
 
 Default for production use.
@@ -662,134 +583,188 @@ Default for production use.
 Import existing identity from PEM:
 
 ```bash
-icp identity import production-identity ./production.pem --storage-mode keyring
-icp identity use production-identity
+icp identity import production-identity --from-pem ./production.pem
+icp identity default production-identity
 ```
 
 ### Exporting for Backup
 
-Export identity for backup (creates PEM file):
+Export identity for backup (outputs PEM to stdout):
 
 ```bash
 icp identity export my-identity > backup.pem
 # Store backup.pem securely offline
 ```
 
+For password-protected identities:
+
+```bash
+icp identity export my-identity --password-file ./password.txt > backup.pem
+```
+
+### Renaming an Identity
+
+Change the name of an existing identity:
+
+```bash
+icp identity rename old-name new-name
+```
+
+### Deleting an Identity
+
+Remove an identity you no longer need:
+
+```bash
+icp identity delete my-old-identity
+```
+
+**Warning:** This permanently deletes the identity. Export a backup first if you might need it later.
+
+### HSM Identity (PKCS#11)
+
+Link a hardware security module identity:
+
+```bash
+icp identity link hsm my-hsm-identity \
+  --pkcs11-module /usr/local/lib/libsofthsm2.so \
+  --slot 0 \
+  --key-id 01 \
+  --pin-file ./hsm_pin.txt
+```
+
+Supported key algorithms: Secp256k1, Prime256v1 (NIST P-256), Ed25519.
+
 ### Password-Protected Identity for CI/CD
 
 Create password-protected identity for automated environments:
 
 ```bash
-icp identity new ci-identity --storage-mode password-protected
+icp identity new ci-identity --storage password
 # Enter password when prompted
 
 # Use in CI with password file
 echo "password" > password.txt
-ICP_IDENTITY_PASSWORD_FILE=password.txt icp deploy -e ic
+icp deploy --identity ci-identity --identity-password-file password.txt -e ic
 ```
 
-### Getting Ledger Account ID (Beta.5 Feature)
+### Getting Ledger Account ID
 
 Get your ICP ledger AccountIdentifier:
 
 ```bash
 icp identity account-id
 # Output: d4685b31b51450508aff0331584df7692a84467b680326f5c5f7d30ae711682f
-```
 
-This displays the AccountIdentifier hex string for ICP ledger transfers.
+# Convert any principal to account ID
+icp identity account-id --of-principal aaaaa-aa
+```
 
 ### Using AccountIdentifier for Transfers
 
 Transfer ICP tokens using AccountIdentifier:
 
 ```bash
-icp token transfer --to d4685b31b51450508aff0331584df7692a84467b680326f5c5f7d30ae711682f --amount 1.5
+icp token transfer 1.5 d4685b31b51450508aff0331584df7692a84467b680326f5c5f7d30ae711682f -n ic
 ```
-
-Beta.5 supports AccountIdentifier hex strings directly.
 
 ## Cycles Management
 
 ### Checking Cycles Balance
 
-Check your cycles wallet balance:
+Check your cycles balance:
 
 ```bash
-icp cycles balance
+icp cycles balance -n ic
 # Output: 15.2 T cycles
 ```
 
 Human-readable output (T = trillion).
 
-### Top-Up with Human-Readable Amounts (Beta.5 Feature)
+### Top-Up with Human-Readable Amounts
 
 Top-up canister using human-friendly formats:
 
 ```bash
 # Using trillion (T)
-icp canister top-up --amount 2T backend
+icp canister top-up --amount 2T backend -e ic
 
 # Using billion (b or B)
-icp canister top-up --amount 500b backend
+icp canister top-up --amount 500b backend -e ic
 
 # Using million (m or M)
-icp canister top-up --amount 1.5m backend
+icp canister top-up --amount 1.5m backend -e ic
 
 # Using thousand (k or K)
-icp canister top-up --amount 100k backend
+icp canister top-up --amount 100k backend -e ic
 
 # Using underscores for readability
-icp canister top-up --amount 2_000_000_000_000 backend
+icp canister top-up --amount 2_000_000_000_000 backend -e ic
 ```
 
-Supported formats (NEW in beta.5):
+Supported formats:
 - `1_000` (underscores)
 - `1k` or `1K` (thousand)
 - `1.5m` or `1.5M` (million)
 - `1_234.5b` or `1_234.5B` (billion)
 - `4T` (trillion)
 
-### Minting Cycles
+### Converting ICP to Cycles
 
-Mint cycles from ICP tokens:
+Convert ICP tokens to cycles:
 
 ```bash
-# Mint 5.0 ICP worth of cycles
-icp cycles mint --amount 5.0
+# Convert a specific amount of ICP
+icp cycles mint --icp 5 -n ic
+
+# Or request a specific amount of cycles
+icp cycles mint --cycles 5T -n ic
 ```
 
-### Transferring Cycles (Beta.5 NEW Command)
+### Transferring Cycles
 
-Transfer cycles to another canister:
+Transfer cycles to another principal (positional args: amount, receiver):
 
 ```bash
-# NEW command (replaces 'icp token cycles transfer')
-icp cycles transfer --to rrkah-fqaaa-aaaaa-aaaaq-cai --amount 2T
+# Transfer 2 trillion cycles
+icp cycles transfer 2T rrkah-fqaaa-aaaaa-aaaaq-cai -n ic
 
 # Human-readable amounts supported
-icp cycles transfer --to rrkah-fqaaa-aaaaa-aaaaq-cai --amount 500m
+icp cycles transfer 500m rrkah-fqaaa-aaaaa-aaaaq-cai -n ic
 ```
 
-**BREAKING CHANGE (beta.5):** The old `icp token cycles transfer` command has been replaced with `icp cycles transfer`.
+### Token Transfers
 
-### Token Transfers with AccountIdentifier
-
-Transfer ICP tokens using AccountIdentifier hex strings:
+Transfer ICP tokens (positional args: amount, receiver):
 
 ```bash
-icp token transfer \
-  --to d4685b31b51450508aff0331584df7692a84467b680326f5c5f7d30ae711682f \
-  --amount 10.5
+icp token transfer 10.5 d4685b31b51450508aff0331584df7692a84467b680326f5c5f7d30ae711682f -n ic
 ```
 
-Beta.5 accepts AccountIdentifier hex strings for transfers.
+### ICRC-1 Token Operations
+
+Work with any ICRC-1 token by specifying the ledger canister ID:
+
+```bash
+# Check ckBTC balance
+icp token mxzaz-hqaaa-aaaar-qaada-cai balance -n ic
+
+# Transfer ckBTC
+icp token mxzaz-hqaaa-aaaar-qaada-cai transfer 0.001 xxxxx-xxxxx-xxxxx-xxxxx-cai -n ic
+```
 
 ## Argument Handling Examples
 
-### File-Based Candid Arguments
+### Candid Arguments
 
-Create argument file in Candid IDL format:
+Pass Candid text directly:
+
+```bash
+icp canister call backend init '(record { name = "My Service"; max_users = 1000 : nat64 })'
+```
+
+### File-Based Arguments
+
+Create argument file in Candid format:
 
 ```candid
 // args/init.did
@@ -803,85 +778,60 @@ Create argument file in Candid IDL format:
 })
 ```
 
-Use with canister call:
+Use with canister call (file path as positional argument):
 
 ```bash
-icp canister call backend init --argument-file args/init.did
+icp canister call backend init args/init.did
 ```
 
 Use with canister install:
 
 ```bash
-icp canister install backend --argument-file args/init.did
+icp canister install backend --args args/init.did
 ```
 
-### File-Based Hex Arguments
+### Hex-Encoded Arguments
 
-Create hex-encoded argument file:
-
-```
-4449444C016D016C02007101781768656C6C6F20776F726C640100
-```
-
-Use with canister operations:
+Pass hex-encoded arguments directly:
 
 ```bash
-icp canister install backend --argument-file args/init.hex
+icp canister call backend method 4449444C0001710B48656C6C6F20576F726C64
 ```
 
-### Direct Hex-Encoded Arguments
+### Configuring init_args in icp.yaml
 
-Pass hex-encoded arguments directly on command line:
-
-```bash
-icp canister call backend method --argument 4449444C0001710B48656C6C6F20576F726C64
-```
-
-### Configuring install_args in icp.yaml
-
-Point to argument files in configuration:
+Point to argument values in configuration:
 
 ```yaml
 # icp.yaml
 canisters:
-  backend:
-    type: recipe
+  - name: backend
     recipe:
-      type: "@dfinity/rust"
+      type: "@dfinity/rust@v3.0.0"
       configuration:
         package: backend
-    install_args: args/init.did  # Candid format
-
-  frontend:
-    type: recipe
-    recipe:
-      type: "@dfinity/asset-canister"
-      configuration:
-        dir: dist
-    install_args: args/frontend_init.hex  # Hex format
+    init_args: "(record { admin = principal \"aaaaa-aa\" })"
 ```
 
-Deploy uses the specified argument files automatically:
+Deploy uses the specified arguments automatically:
 
 ```bash
-icp deploy  # Uses args/init.did for backend, args/frontend_init.hex for frontend
+icp deploy  # Uses init_args for backend
 ```
 
 ### When to Use Each Format
 
-**Candid IDL (`.did` files):**
+**Candid IDL:**
 - Development and testing (human-readable)
 - Complex nested structures
 - Type-safe argument validation
-- Documentation purposes
 
 **Hex-encoded:**
 - Binary data
 - Programmatically generated arguments
 - CI/CD pipelines (compact, no escaping issues)
-- Production deployments
 
-**File-based (both formats):**
+**File-based:**
 - Reusable configurations
 - Version-controlled initialization data
 - Avoiding shell escaping problems

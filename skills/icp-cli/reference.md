@@ -1,6 +1,6 @@
 # ICP CLI Reference
 
-Detailed reference for the ICP CLI recipe system, environment management, containerized networks, configuration, and advanced features.
+Detailed reference for the ICP CLI v0.1.0 recipe system, environment management, network configuration, YAML configuration, and advanced features.
 
 ## Recipe System
 
@@ -22,14 +22,15 @@ Instead of manually configuring build steps, source files, and sync operations, 
 
 The `@dfinity` namespace provides officially-supported recipes from the [icp-cli-recipes repository](https://github.com/dfinity/icp-cli-recipes):
 
+All recipes MUST include an explicit version. Unversioned recipes are not supported.
+
 **@dfinity/rust** - Rust canister
 
 ```yaml
 canisters:
-  backend:
-    type: recipe
+  - name: backend
     recipe:
-      type: "@dfinity/rust"
+      type: "@dfinity/rust@v3.0.0"
       configuration:
         package: backend  # Cargo package name
 ```
@@ -38,22 +39,23 @@ canisters:
 
 ```yaml
 canisters:
-  backend:
-    type: recipe
+  - name: backend
     recipe:
-      type: "@dfinity/motoko"
+      type: "@dfinity/motoko@v4.0.0"
       configuration:
-        main: src/main.mo  # Main Motoko file
+        main: src/main.mo       # Main Motoko file
+        args: ""                 # moc compiler flags (required in v4.0.0, will become optional)
 ```
+
+Use `args: --incremental-gc` to enable incremental GC, or `args: ""` for no extra flags. Omitting `args` entirely causes a template error in v4.0.0.
 
 **@dfinity/asset-canister** - Frontend assets
 
 ```yaml
 canisters:
-  frontend:
-    type: recipe
+  - name: frontend
     recipe:
-      type: "@dfinity/asset-canister"
+      type: "@dfinity/asset-canister@v2.1.0"
       configuration:
         dir: dist  # Directory containing built assets
 ```
@@ -62,10 +64,9 @@ canisters:
 
 ```yaml
 canisters:
-  prebuilt:
-    type: recipe
+  - name: prebuilt
     recipe:
-      type: "@dfinity/prebuilt"
+      type: "@dfinity/prebuilt@v2.0.0"
       configuration:
         path: ./target/wasm32-unknown-unknown/release/canister.wasm
         sha256: "abc123..."  # SHA-256 hash for integrity verification
@@ -73,21 +74,21 @@ canisters:
 
 ### Recipe Shorthand
 
-The `@dfinity/` shorthand automatically resolves to the latest version from GitHub releases:
+The `@dfinity/` shorthand automatically resolves to the recipe repository:
 
 ```
-@dfinity/rust
+@dfinity/rust@v3.0.0
 ```
 
 is equivalent to:
 
 ```
-https://github.com/dfinity/icp-cli-recipes/releases/download/rust-latest/recipe.hbs
+https://github.com/dfinity/icp-cli-recipes/releases/download/rust-v3.0.0/recipe.hbs
 ```
 
-### Version Pinning
+### Version Pinning (Required)
 
-Pin to specific recipe versions for reproducible builds:
+All recipes MUST specify a version:
 
 ```yaml
 recipe:
@@ -96,20 +97,19 @@ recipe:
     package: backend
 ```
 
-Version pinning is recommended for:
-- Production deployments
-- Team projects requiring build reproducibility
-- CI/CD pipelines
+Unversioned recipes (e.g., `@dfinity/rust` without a version) are not supported. Always pin to a specific version for reproducible builds.
 
 ### Local Recipes
 
 Use project-specific Handlebars templates for custom build workflows:
 
 ```yaml
-recipe:
-  type: "file://recipes/my-custom-recipe.hbs"
-  configuration:
-    custom_option: value
+canisters:
+  - name: backend
+    recipe:
+      type: "file://recipes/my-custom-recipe.hbs"
+      configuration:
+        custom_option: value
 ```
 
 Local recipes are useful for:
@@ -122,11 +122,13 @@ Local recipes are useful for:
 Reference any recipe URL with SHA-256 integrity verification:
 
 ```yaml
-recipe:
-  type: "https://example.com/recipes/custom.hbs"
-  sha256: "abc123..."  # Required for integrity
-  configuration:
-    option: value
+canisters:
+  - name: backend
+    recipe:
+      type: "https://example.com/recipes/custom.hbs"
+      sha256: "abc123..."  # Required for integrity
+      configuration:
+        option: value
 ```
 
 ### Viewing Expanded Configuration
@@ -147,7 +149,7 @@ This displays the complete YAML after recipe expansion, useful for:
 Each recipe defines its own configuration options. Check recipe documentation for available fields:
 
 - **@dfinity/rust**: `package` (Cargo package name)
-- **@dfinity/motoko**: `main` (main Motoko file path)
+- **@dfinity/motoko**: `main` (main Motoko file path), `args` (moc compiler flags, required in v4.0.0 - use `""` if no flags needed)
 - **@dfinity/asset-canister**: `dir` (asset directory)
 - **@dfinity/prebuilt**: `path` (WASM file), `sha256` (integrity hash)
 
@@ -159,15 +161,14 @@ Recipes define only build and sync configuration. Add canister settings separate
 
 ```yaml
 canisters:
-  backend:
-    type: recipe
+  - name: backend
     recipe:
-      type: "@dfinity/rust"
+      type: "@dfinity/rust@v3.0.0"
       configuration:
         package: backend
     settings:
       compute_allocation: 10
-      memory_allocation: 1GB
+      memory_allocation: 1073741824
       controllers:
         - aaaaa-aa
 ```
@@ -205,7 +206,18 @@ icp deploy -e local   # Deploy to local network
 icp deploy -e ic      # Deploy to IC mainnet
 ```
 
-**BREAKING CHANGE (beta.5)**: "mainnet" environment renamed to "ic". Use `-e ic` instead of `--mainnet` flag.
+### Network vs Environment Flags (-n vs -e)
+
+Understanding when to use each flag is essential:
+
+| Flag | Purpose | Used With | Example |
+|------|---------|-----------|---------|
+| `-n ic` | Network flag | Token and cycles operations | `icp token balance -n ic`, `icp cycles mint -n ic` |
+| `-e ic` | Environment flag | Deployment and canister operations | `icp deploy -e ic`, `icp canister status my-canister -e ic` |
+
+**Canister names** (like `my-canister`) must use `-e <environment>` because the environment knows about your project's canister mappings.
+
+**Canister IDs** (like `ryjl3-tyaaa-aaaaa-aaaba-cai`) can use either `-e` or `-n`.
 
 ### Custom Environments
 
@@ -213,15 +225,20 @@ Define custom environments in `icp.yaml`:
 
 ```yaml
 environments:
-  staging:
+  - name: staging
     network: ic
+    canisters: [backend]
     settings:
-      compute_allocation: 5  # Lower allocation for staging
-  production:
+      backend:
+        compute_allocation: 5
+
+  - name: production
     network: ic
+    canisters: [backend]
     settings:
-      compute_allocation: 20  # Higher for production
-      memory_allocation: 2GB
+      backend:
+        compute_allocation: 20
+        memory_allocation: 2147483648
 ```
 
 Deploy to custom environments:
@@ -237,23 +254,22 @@ Override canister settings per environment:
 
 ```yaml
 canisters:
-  backend:
-    type: recipe
+  - name: backend
     recipe:
-      type: "@dfinity/rust"
+      type: "@dfinity/rust@v3.0.0"
       configuration:
         package: backend
     settings:
       compute_allocation: 10  # Default
 
 environments:
-  production:
+  - name: production
     network: ic
-    canisters:
+    canisters: [backend]
+    settings:
       backend:
-        settings:
-          compute_allocation: 50  # Override for production
-          memory_allocation: 4GB
+        compute_allocation: 50  # Override for production
+        memory_allocation: 4294967296
 ```
 
 ### Canister ID Management
@@ -284,8 +300,8 @@ Deploy to specific environment:
 
 ```bash
 icp deploy -e <environment>
-icp canister status -e <environment>
-icp canister call -e <environment> <canister> <method>
+icp canister status <canister> -e <environment>
+icp canister call <canister> <method> -e <environment>
 ```
 
 ### Multi-Stage Deployment Workflow
@@ -298,80 +314,76 @@ Standard workflow for promoting changes:
 
 Each stage uses different canister IDs and can have different resource allocations.
 
-## Containerized Networks
+## Network Configuration
 
-### What Are Containerized Networks?
+### Managed Networks
 
-Containerized networks run the PocketIC replica in Docker containers, providing isolated, reproducible local networks. Unlike managed networks (default), containerized networks:
-
-- Run in complete isolation from other projects
-- Allow multiple networks simultaneously
-- Are ideal for CI/CD pipelines
-- Provide reproducible environments
-
-### Benefits
-
-- **Isolation**: Each project has its own network instance
-- **Multiple instances**: Run multiple local networks in parallel
-- **CI/CD ready**: Docker-based networks work in containerized build environments
-- **Reproducibility**: Same network configuration across machines
-
-### Configuration
-
-Define in `icp.yaml`:
+Default local development networks using native PocketIC:
 
 ```yaml
 networks:
-  local:
-    type: containerized
-    container:
-      image: ghcr.io/dfinity/pocketic:latest
-      ports:
-        - "8000:8000"  # Replica API
+  - name: local
+    mode: managed
+    gateway:
+      host: 127.0.0.1
+      port: 8000
 ```
 
-### Security (Beta.5 Improvement)
+### Docker Networks
 
-Networks now bind to `127.0.0.1` by default, preventing external network access:
+Docker-based networks for isolation and CI/CD:
 
 ```yaml
 networks:
-  local:
-    type: containerized
-    container:
-      ports:
-        - "127.0.0.1:8000:8000"  # Binds only to localhost
+  - name: local
+    mode: managed
+    image: ghcr.io/dfinity/icp-cli-network-launcher
+    port-mapping:
+      - "8000:4943"
+```
+
+### Connected Networks
+
+Connect to external networks:
+
+```yaml
+networks:
+  - name: testnet
+    mode: connected
+    url: https://testnet.ic0.app
+    root-key: <hex-encoded-key>
+```
+
+### Network Options
+
+Configure local network features:
+
+```yaml
+networks:
+  - name: local
+    mode: managed
+    ii: true                    # Enable Internet Identity
+    nns: true                   # Enable Network Nervous System
+    subnets:                    # Configure subnet types
+      - application
+      - application
+    artificial_delay_ms: 50     # Simulate network latency
 ```
 
 ### Platform Requirements
 
 **Windows:**
-- Docker Desktop is **required** for local networks (both managed and containerized)
+- Docker Desktop is **required** for local networks (both managed and Docker-based)
 - Native Rust canister support
 - Motoko canisters require WSL (Motoko compiler doesn't run on Windows)
 
 **macOS/Linux:**
 - Native support for all canister types
-- Docker required only for containerized networks (optional for managed networks)
+- Docker required only for Docker-based networks (optional for managed networks)
 
-### IC Network Configuration
+### When to Use Docker Networks
 
-When using the `ic` environment, configure IC-specific options:
-
-```yaml
-networks:
-  ic:
-    ii: true              # Enable Internet Identity
-    nns: true             # Enable Network Nervous System
-    subnets: 2            # Number of subnets
-    artificial-delay-ms: 100  # Simulate network latency
-```
-
-These options are useful for local testing that simulates IC mainnet behavior.
-
-### When to Use Containerized Networks
-
-**Use containerized networks when:**
+**Use Docker-based networks when:**
 - Running CI/CD pipelines
 - Developing multiple projects simultaneously
 - Requiring strict network isolation
@@ -389,20 +401,19 @@ These options are useful for local testing that simulates IC mainnet behavior.
 The `icp.yaml` file has three main sections:
 
 ```yaml
-canisters:    # Canister definitions
-  backend:
-    type: recipe
+canisters:    # Canister definitions (list)
+  - name: backend
     recipe:
-      type: "@dfinity/rust"
+      type: "@dfinity/rust@v3.0.0"
       configuration:
         package: backend
 
-networks:     # Network definitions
-  local:
-    type: managed
+networks:     # Network definitions (list, optional)
+  - name: local
+    mode: managed
 
-environments: # Environment definitions
-  production:
+environments: # Environment definitions (list, optional)
+  - name: production
     network: ic
 ```
 
@@ -412,13 +423,12 @@ Recipe-based canister definition:
 
 ```yaml
 canisters:
-  backend:
-    type: recipe
+  - name: backend
     recipe:
-      type: "@dfinity/rust"           # Recipe type
-      configuration:                  # Recipe-specific config
+      type: "@dfinity/rust@v3.0.0"  # Recipe type (version required)
+      configuration:                 # Recipe-specific config
         package: backend
-    settings:                         # Canister settings (separate)
+    settings:                        # Canister settings (separate)
       compute_allocation: 10
 ```
 
@@ -428,10 +438,9 @@ canisters:
 
 ```yaml
 canisters:
-  backend:
-    type: recipe
+  - name: backend
     recipe:
-      type: "@dfinity/rust"
+      type: "@dfinity/rust@v3.0.0"
       configuration:
         package: backend  # Matches Cargo.toml package name
 ```
@@ -440,22 +449,21 @@ canisters:
 
 ```yaml
 canisters:
-  backend:
-    type: recipe
+  - name: backend
     recipe:
-      type: "@dfinity/motoko"
+      type: "@dfinity/motoko@v4.0.0"
       configuration:
         main: src/backend/main.mo  # Path to main Motoko file
+        args: ""                    # Required in v4.0.0 (use "" or e.g. --incremental-gc)
 ```
 
 **Asset canister:**
 
 ```yaml
 canisters:
-  frontend:
-    type: recipe
+  - name: frontend
     recipe:
-      type: "@dfinity/asset-canister"
+      type: "@dfinity/asset-canister@v2.1.0"
       configuration:
         dir: dist  # Directory with built frontend assets
 ```
@@ -464,10 +472,9 @@ canisters:
 
 ```yaml
 canisters:
-  prebuilt:
-    type: recipe
+  - name: prebuilt
     recipe:
-      type: "@dfinity/prebuilt"
+      type: "@dfinity/prebuilt@v2.0.0"
       configuration:
         path: ./custom.wasm
         sha256: "abc123def456..."  # SHA-256 hash for integrity
@@ -475,50 +482,13 @@ canisters:
 
 ### External File References
 
-Reference external files for arguments:
+Reference external canister files or use glob patterns:
 
 ```yaml
 canisters:
-  backend:
-    type: recipe
-    recipe:
-      type: "@dfinity/rust"
-      configuration:
-        package: backend
-    install_args: args/backend_init.did  # Candid init arguments
-```
-
-### Glob Patterns for Sources
-
-Use glob patterns to specify source files:
-
-```yaml
-sources:
-  - "src/**/*.rs"
-  - "Cargo.toml"
-  - "Cargo.lock"
-```
-
-### Modular Project Organization
-
-Import configuration from external files:
-
-```yaml
-# icp.yaml
-import:
-  - canisters/backend.yaml
-  - canisters/frontend.yaml
-```
-
-```yaml
-# canisters/backend.yaml
-canisters:
-  backend:
-    type: recipe
-    recipe:
-      type: "@dfinity/rust"
-      configuration:
-        package: backend
+  - path/to/canister.yaml
+  - canisters/*
+  - services/**/*.yaml
 ```
 
 ### Build Configuration
@@ -527,11 +497,27 @@ Recipes handle build configuration automatically. For manual builds:
 
 ```yaml
 canisters:
-  custom:
+  - name: custom
     build:
-      - script: cargo build --release --target wasm32-unknown-unknown
-      - script: ic-wasm target/wasm32-unknown-unknown/release/custom.wasm -o custom_optimized.wasm
-    wasm: custom_optimized.wasm
+      steps:
+        - type: script
+          commands:
+            - cargo build --release --target wasm32-unknown-unknown
+            - cp target/wasm32-unknown-unknown/release/custom.wasm "$ICP_WASM_OUTPUT_PATH"
+```
+
+### Pre-built Steps
+
+Use existing WASM from local file or remote URL:
+
+```yaml
+canisters:
+  - name: prebuilt
+    build:
+      steps:
+        - type: pre-built
+          path: dist/canister.wasm
+          sha256: abc123...
 ```
 
 ### Sync Steps for Asset Uploads
@@ -540,50 +526,66 @@ Asset canisters use sync steps to upload files:
 
 ```yaml
 canisters:
-  frontend:
-    type: recipe
+  - name: frontend
     recipe:
-      type: "@dfinity/asset-canister"
+      type: "@dfinity/asset-canister@v2.1.0"
       configuration:
         dir: dist  # Recipe handles sync automatically
 ```
 
 ### Environment Variables in Settings
 
-Pass environment variables to canisters:
+Pass environment variables to canisters (key-value pairs):
 
 ```yaml
 canisters:
-  backend:
+  - name: backend
     settings:
       environment_variables:
-        - name: API_KEY
-          value: "secret-key"
-        - name: LOG_LEVEL
-          value: "debug"
+        API_KEY: "secret-key"
+        LOG_LEVEL: "debug"
 ```
 
-### install_args Configuration
+### init_args Configuration
 
-Point to argument files for canister initialization:
+Canister initialization arguments (Candid text, hex, or file path):
 
 ```yaml
 canisters:
-  backend:
-    type: recipe
+  - name: backend
     recipe:
-      type: "@dfinity/rust"
+      type: "@dfinity/rust@v3.0.0"
       configuration:
         package: backend
-    install_args: args/init.did  # Candid format
+    init_args: "(record { admin = principal \"aaaaa-aa\" })"
 ```
 
-Or use hex format:
+Or hex format:
 
 ```yaml
 canisters:
-  backend:
-    install_args: args/init.hex  # Hex-encoded arguments
+  - name: backend
+    init_args: "4449444c016d7b0100010203"
+```
+
+### Modular Project Organization
+
+Import configuration from external files:
+
+```yaml
+# icp.yaml
+canisters:
+  - canisters/backend.yaml
+  - canisters/frontend.yaml
+```
+
+```yaml
+# canisters/backend.yaml
+name: backend
+recipe:
+  type: "@dfinity/rust@v3.0.0"
+  configuration:
+    package: backend
 ```
 
 ### Combining Recipes with Settings
@@ -592,15 +594,14 @@ Recipes define build/sync configuration. Settings are defined separately:
 
 ```yaml
 canisters:
-  backend:
-    type: recipe
+  - name: backend
     recipe:
-      type: "@dfinity/rust"
+      type: "@dfinity/rust@v3.0.0"
       configuration:
         package: backend
     settings:                    # Separate from recipe
       compute_allocation: 20
-      memory_allocation: 2GB
+      memory_allocation: 2147483648
       controllers:
         - aaaaa-aa
         - bbbbb-bb
@@ -616,14 +617,14 @@ All available canister settings:
 ```yaml
 settings:
   compute_allocation: 10              # Percentage (0-100)
-  memory_allocation: 2GB              # Max memory (bytes or human-readable)
+  memory_allocation: 2147483648       # Max memory (bytes)
   freezing_threshold: 2592000         # Seconds (default: 30 days)
-  reserved_cycles_limit: 5T           # Max cycles reserved
-  wasm_memory_limit: 3GB              # Max WASM memory
-  log_visibility: controllers         # Who can read logs (public/controllers)
-  environment_variables:              # Environment variables
-    - name: VAR_NAME
-      value: "value"
+  reserved_cycles_limit: 1000000000000  # Max cycles reserved
+  wasm_memory_limit: 1073741824       # Max WASM memory (bytes)
+  wasm_memory_threshold: 536870912    # Low-memory callback threshold (bytes)
+  log_visibility: controllers         # Who can read logs
+  environment_variables:              # Runtime key-value pairs
+    KEY: "value"
   controllers:                        # Controller principals
     - aaaaa-aa
     - bbbbb-bb
@@ -642,11 +643,11 @@ Use for latency-sensitive canisters requiring predictable performance.
 
 ### Memory Allocation
 
-Maximum memory the canister can use. Specified in bytes or human-readable format:
+Maximum memory the canister can use (in bytes):
 
 ```yaml
 settings:
-  memory_allocation: 4GB  # 4 gigabytes maximum
+  memory_allocation: 4294967296  # 4GB
 ```
 
 Memory is billed based on allocation, not usage.
@@ -668,7 +669,7 @@ Maximum cycles that can be reserved:
 
 ```yaml
 settings:
-  reserved_cycles_limit: 10T  # 10 trillion cycles
+  reserved_cycles_limit: 10000000000000  # ~10T cycles
 ```
 
 ### WASM Memory Limit
@@ -677,7 +678,16 @@ Maximum memory available to WASM execution:
 
 ```yaml
 settings:
-  wasm_memory_limit: 3GB
+  wasm_memory_limit: 3221225472  # 3GB
+```
+
+### WASM Memory Threshold
+
+Memory threshold that triggers low-memory callbacks:
+
+```yaml
+settings:
+  wasm_memory_threshold: 536870912  # 512MB
 ```
 
 ### Log Visibility
@@ -685,10 +695,32 @@ settings:
 Control who can read canister logs:
 
 ```yaml
+# Only controllers (default)
 settings:
-  log_visibility: public      # Anyone can read logs
-  # OR
-  log_visibility: controllers # Only controllers can read logs
+  log_visibility: controllers
+
+# Anyone can read logs
+settings:
+  log_visibility: public
+
+# Specific principals can view logs
+settings:
+  log_visibility:
+    allowed_viewers:
+      - "aaaaa-aa"
+      - "2vxsx-fae"
+```
+
+### Environment Variables
+
+Runtime configuration for canisters (key-value pairs):
+
+```yaml
+settings:
+  environment_variables:
+    API_URL: "https://api.example.com"
+    DEBUG: "false"
+    FEATURE_FLAGS: "advanced=true"
 ```
 
 ### Setting at Canister vs Environment Level
@@ -697,7 +729,7 @@ settings:
 
 ```yaml
 canisters:
-  backend:
+  - name: backend
     settings:
       compute_allocation: 10
 ```
@@ -706,11 +738,12 @@ canisters:
 
 ```yaml
 environments:
-  production:
-    canisters:
+  - name: production
+    network: ic
+    canisters: [backend]
+    settings:
       backend:
-        settings:
-          compute_allocation: 50  # Production gets more compute
+        compute_allocation: 50  # Production gets more compute
 ```
 
 ### Subnet Selection
@@ -718,15 +751,7 @@ environments:
 Deploy to specific subnet during creation:
 
 ```bash
-icp canister create --subnet <subnet-id>
-```
-
-Or specify in `icp.yaml`:
-
-```yaml
-canisters:
-  backend:
-    subnet: <subnet-id>
+icp canister create backend --subnet <subnet-id>
 ```
 
 ### Settings Commands
@@ -741,6 +766,8 @@ Update settings:
 
 ```bash
 icp canister settings update <canister> --compute-allocation 20
+icp canister settings update <canister> --log-visibility public
+icp canister settings update <canister> --add-log-viewer <principal>
 ```
 
 Sync settings from YAML:
@@ -751,73 +778,48 @@ icp canister settings sync <canister>
 
 ## Argument Handling
 
-### File-Based Arguments (NEW in Beta.5)
+### Positional Arguments
 
-Pass complex arguments via files instead of command line.
-
-**Candid IDL format:**
+In v0.1.0, canister call and install arguments are positional and can be Candid text, hex-encoded bytes, or file paths:
 
 ```bash
-icp canister call backend init --argument-file args/init.did
+# Candid text
+icp canister call backend init '(record { name = "My Canister" })'
+
+# Hex-encoded
+icp canister call backend method 4449444C0001710B48656C6C6F20576F726C64
+
+# File path (Candid or hex content)
+icp canister call backend init args/init.did
 ```
 
-```candid
-// args/init.did
-(record {
-  name = "My Canister";
-  max_users = 1000 : nat64;
-})
-```
-
-**Hex format:**
+### Install Arguments
 
 ```bash
-icp canister install backend --argument-file args/init.hex
+# With Candid args
+icp canister install backend --args '(record { admin = principal "aaaaa-aa" })'
+
+# With file
+icp canister install backend --args args/init.did
 ```
-
-```
-4449444C...
-```
-
-### Hex-Encoded Arguments
-
-Pass hex-encoded arguments directly:
-
-```bash
-icp canister call backend method --argument 4449444C0001710B48656C6C6F20576F726C64
-```
-
-Useful for:
-- Binary data
-- Compact representation
-- Arguments generated programmatically
 
 ### Configuration in icp.yaml
 
-Point to argument files in configuration:
+Point to argument values in configuration:
 
 ```yaml
 canisters:
-  backend:
-    type: recipe
+  - name: backend
     recipe:
-      type: "@dfinity/rust"
+      type: "@dfinity/rust@v3.0.0"
       configuration:
         package: backend
-    install_args: args/init.did  # Candid format
-```
-
-Or hex format:
-
-```yaml
-canisters:
-  backend:
-    install_args: args/init.hex  # Hex-encoded
+    init_args: "(record { admin = principal \"aaaaa-aa\" })"
 ```
 
 ### When to Use Each Format
 
-**Candid IDL (`.did` files):**
+**Candid IDL:**
 - Human-readable arguments
 - Type-safe with Candid type checking
 - Complex nested structures
@@ -835,23 +837,77 @@ canisters:
 - Avoiding shell escaping issues
 - Version-controlled initialization data
 
+## Complete Example
+
+```yaml
+canisters:
+  - name: frontend
+    recipe:
+      type: "@dfinity/asset-canister@v2.1.0"
+      configuration:
+        dir: dist
+    settings:
+      memory_allocation: 1073741824
+
+  - name: backend
+    recipe:
+      type: "@dfinity/rust@v3.0.0"
+      configuration:
+        package: backend
+    settings:
+      compute_allocation: 5
+    init_args: "(record { admin = principal \"aaaaa-aa\" })"
+
+networks:
+  - name: local
+    mode: managed
+    gateway:
+      port: 9999
+
+environments:
+  - name: staging
+    network: ic
+    canisters: [frontend, backend]
+    settings:
+      backend:
+        compute_allocation: 10
+        environment_variables:
+          ENV: "staging"
+
+  - name: production
+    network: ic
+    canisters: [frontend, backend]
+    settings:
+      frontend:
+        memory_allocation: 4294967296
+      backend:
+        compute_allocation: 30
+        freezing_threshold: 7776000
+        environment_variables:
+          ENV: "production"
+    init_args:
+      backend: "(record { admin = principal \"xxxx-xxxx\" })"
+```
+
 ## Sources
 
 Comprehensive ICP CLI documentation:
 
-- ICP CLI Documentation: https://dfinity.github.io/icp-cli/
-- Quickstart: https://dfinity.github.io/icp-cli/quickstart/
-- Tutorial: https://dfinity.github.io/icp-cli/tutorial/
-- Recipes Guide: https://dfinity.github.io/icp-cli/guides/using-recipes/
-- Creating Recipes: https://dfinity.github.io/icp-cli/guides/creating-recipes/
-- Environments Guide: https://dfinity.github.io/icp-cli/guides/managing-environments/
-- Mainnet Deployment: https://dfinity.github.io/icp-cli/guides/deploying-to-mainnet/
-- Containerized Networks: https://dfinity.github.io/icp-cli/guides/containerized-networks/
-- Managing Identities: https://dfinity.github.io/icp-cli/guides/managing-identities/
-- Tokens and Cycles: https://dfinity.github.io/icp-cli/guides/tokens-and-cycles/
-- CLI Reference: https://dfinity.github.io/icp-cli/reference/cli/
-- Configuration Reference: https://dfinity.github.io/icp-cli/reference/configuration/
-- Canister Settings: https://dfinity.github.io/icp-cli/reference/canister-settings/
-- Beta Releases: https://github.com/dfinity/icp-cli/releases
-- Forum Announcement: https://forum.dfinity.org/t/first-beta-release-of-icp-cli/60410
+- ICP CLI Documentation: https://dfinity.github.io/icp-cli/0.1/
+- Quickstart: https://dfinity.github.io/icp-cli/0.1/quickstart/
+- Tutorial: https://dfinity.github.io/icp-cli/0.1/tutorial/
+- Recipes Guide: https://dfinity.github.io/icp-cli/0.1/guides/using-recipes/
+- Creating Recipes: https://dfinity.github.io/icp-cli/0.1/guides/creating-recipes/
+- Environments Guide: https://dfinity.github.io/icp-cli/0.1/guides/managing-environments/
+- Mainnet Deployment: https://dfinity.github.io/icp-cli/0.1/guides/deploying-to-mainnet/
+- Deploying to Subnets: https://dfinity.github.io/icp-cli/0.1/guides/deploying-to-specific-subnets/
+- Containerized Networks: https://dfinity.github.io/icp-cli/0.1/guides/containerized-networks/
+- Managing Identities: https://dfinity.github.io/icp-cli/0.1/guides/managing-identities/
+- Tokens and Cycles: https://dfinity.github.io/icp-cli/0.1/guides/tokens-and-cycles/
+- CLI Reference: https://dfinity.github.io/icp-cli/0.1/reference/cli/
+- Configuration Reference: https://dfinity.github.io/icp-cli/0.1/reference/configuration/
+- Canister Settings: https://dfinity.github.io/icp-cli/0.1/reference/canister-settings/
+- Environment Variables: https://dfinity.github.io/icp-cli/0.1/reference/environment-variables/
+- Releases: https://github.com/dfinity/icp-cli/releases
+- Forum Announcement: https://forum.dfinity.org/t/icp-cli-announcements-and-feedback-discussion/60410
 - Recipe Repository: https://github.com/dfinity/icp-cli-recipes
